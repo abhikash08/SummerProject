@@ -2,96 +2,80 @@ using UnityEngine;
 
 public class Grabber : MonoBehaviour
 {
+    [Header("Grab Settings")]
+    public float grabRadius = 1.2f;
     public float grabDuration = 2.5f;
     public float grabCooldown = 10f;
-    public float grabRange = 3f;
     public LayerMask pushableLayer;
-    public Transform grabPoint; // Assign this in Inspector
+    public Transform grabPoint;
+
+    private float cooldownTimer = 0f;
+    private float grabTimer = 0f;
 
     private bool isGrabbing = false;
-    private bool isOnCooldown = false;
     private Rigidbody grabbedObject = null;
-    private float grabTimer = 0f;
-    private float cooldownTimer = 0f;
-
-    private Camera playerCamera;
-
-    void Start()
-    {
-        playerCamera = Camera.main;
-    }
 
     void Update()
     {
-        HandleInput();
-        HandleGrabTimer();
-        HandleCooldown();
-        FollowGrabPoint();
-    }
+        if (cooldownTimer > 0f)
+            cooldownTimer -= Time.deltaTime;
 
-    void HandleInput()
-    {
-        if (Input.GetMouseButtonDown(1) && !isGrabbing && !isOnCooldown)
-        {
-            TryGrabObject();
-        }
-    }
-
-    void TryGrabObject()
-    {
-        Ray ray = playerCamera.ScreenPointToRay(Input.mousePosition);
-        if (Physics.Raycast(ray, out RaycastHit hit, grabRange, pushableLayer))
-        {
-            Rigidbody targetRb = hit.collider.GetComponent<Rigidbody>();
-            if (targetRb != null)
-            {
-                grabbedObject = targetRb;
-
-                // Lift object slightly (optional visual feedback)
-                Vector3 lifted = hit.point + Vector3.up * 0.5f;
-                grabbedObject.MovePosition(lifted);
-
-                grabbedObject.velocity = Vector3.zero;
-                grabbedObject.isKinematic = true;
-
-                // Parent to grab point
-                grabbedObject.transform.SetParent(grabPoint);
-
-                isGrabbing = true;
-                grabTimer = grabDuration;
-            }
-        }
-    }
-
-    void FollowGrabPoint()
-    {
-        if (isGrabbing && grabbedObject != null)
-        {
-            grabbedObject.MovePosition(grabPoint.position);
-        }
-    }
-
-    void HandleGrabTimer()
-    {
         if (isGrabbing)
         {
             grabTimer -= Time.deltaTime;
+            if (grabbedObject != null)
+            {
+                grabbedObject.MovePosition(grabPoint.position);
+            }
+
             if (grabTimer <= 0f)
             {
                 ReleaseObject();
             }
         }
+        else if (Input.GetMouseButtonDown(1) && cooldownTimer <= 0f)
+        {
+            TryGrabNearbyObject();
+        }
     }
 
-    void HandleCooldown()
+    void TryGrabNearbyObject()
     {
-        if (isOnCooldown)
+        Collider[] colliders = Physics.OverlapSphere(transform.position, grabRadius, pushableLayer);
+
+        if (colliders.Length == 0) return;
+
+        // Find the closest object
+        float closestDist = float.MaxValue;
+        Rigidbody closestRb = null;
+
+        foreach (Collider col in colliders)
         {
-            cooldownTimer -= Time.deltaTime;
-            if (cooldownTimer <= 0f)
+            Rigidbody rb = col.attachedRigidbody;
+            if (rb != null)
             {
-                isOnCooldown = false;
+                float dist = Vector3.Distance(transform.position, rb.transform.position);
+                if (dist < closestDist)
+                {
+                    closestDist = dist;
+                    closestRb = rb;
+                }
             }
+        }
+
+        if (closestRb != null)
+        {
+            grabbedObject = closestRb;
+            grabbedObject.isKinematic = true;
+            grabbedObject.velocity = Vector3.zero;
+            grabbedObject.transform.position += Vector3.up * 0.5f; // Slight lift
+            grabbedObject.transform.SetParent(grabPoint);
+
+            isGrabbing = true;
+            grabTimer = grabDuration;
+            cooldownTimer = grabCooldown;
+
+            Debug.Log("Grabbed: " + grabbedObject.name);
         }
     }
 
@@ -105,7 +89,13 @@ public class Grabber : MonoBehaviour
         }
 
         isGrabbing = false;
-        isOnCooldown = true;
-        cooldownTimer = grabCooldown;
+        Debug.Log("Released object");
+    }
+
+    void OnDrawGizmosSelected()
+    {
+        // Visualize the grab radius
+        Gizmos.color = Color.cyan;
+        Gizmos.DrawWireSphere(transform.position, grabRadius);
     }
 }
