@@ -11,50 +11,50 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] private float gravity = -9.81f;
     [SerializeField] private float jumpHeight = 2f;
 
-    [SerializeField] private float groundDistance = .2f;
+    [SerializeField] private float groundDistance = 0.2f;
     [SerializeField] private Transform groundCheck;
     [SerializeField] private LayerMask groundMask;
     [SerializeField] private Animator _animator;
 
     private Vector3 velocity;
     private bool isGrounded;
+    private bool wasGrounded;
 
-/*************  ✨ Windsurf Command ⭐  *************/
-    /// <summary>
-    /// Handles player movement and jumping based on user input.
-    /// Checks if the player is grounded for jumping logic and applies gravity.
-    /// Moves the player character relative to the camera's orientation.
-    /// </summary>
-
-/*******  01a4813c-06c1-49e7-ae99-d18c2958d3ca  *******/
     void Update()
     {
-        // Ground Check
+        // Ground check
+        wasGrounded = isGrounded;
         isGrounded = Physics.CheckSphere(groundCheck.position, groundDistance, groundMask);
+
+        // Snap to ground when grounded
         if (isGrounded && velocity.y < 0)
         {
             velocity.y = -2f;
         }
 
-        // Input
+        // Get input
         float horizontal = Input.GetAxis("Horizontal");
         float vertical = Input.GetAxis("Vertical");
         Vector3 inputDir = new Vector3(horizontal, 0f, vertical).normalized;
 
-        //WASD to face
-        if (inputDir.magnitude >= 0.1f)//only move if magnitude large other wise just rotate
+        // Move player
+        if (inputDir.magnitude >= 0.1f)
         {
-            float targetAngle = Mathf.Atan2(inputDir.x, inputDir.z) * Mathf.Rad2Deg + cameraTransform.eulerAngles.y;//movement dir rel to camera
-            Quaternion targetRotation = Quaternion.Euler(0f, targetAngle, 0f);//rotation
+            float targetAngle = Mathf.Atan2(inputDir.x, inputDir.z) * Mathf.Rad2Deg + cameraTransform.eulerAngles.y;
+            Quaternion targetRotation = Quaternion.Euler(0f, targetAngle, 0f);
             transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, Time.deltaTime * 10f);
 
             Vector3 moveDir = Quaternion.Euler(0f, targetAngle, 0f) * Vector3.forward;
             characterController.Move(moveDir.normalized * moveSpeed * Time.deltaTime);
-            _animator.SetFloat("Speed", (moveDir * moveSpeed * Time.deltaTime).magnitude);
-        }
-        else _animator.SetFloat("Speed", 0f);
 
-        // Jump
+            _animator.SetFloat("Speed", moveDir.magnitude);
+        }
+        else
+        {
+            _animator.SetFloat("Speed", 0f);
+        }
+
+        // Jump input
         if (isGrounded && Input.GetButtonDown("Jump"))
         {
             velocity.y = Mathf.Sqrt(jumpHeight * -2f * gravity);
@@ -63,6 +63,8 @@ public class PlayerMovement : MonoBehaviour
         // Apply gravity
         velocity.y += gravity * Time.deltaTime;
         characterController.Move(velocity * Time.deltaTime);
+
+        // Set animator jumping state
+        _animator.SetBool("IsJumping", !isGrounded);
     }
 }
-
